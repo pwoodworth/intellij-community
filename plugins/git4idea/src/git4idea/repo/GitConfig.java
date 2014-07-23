@@ -138,12 +138,25 @@ public class GitConfig {
       return emptyConfig;
     }
 
+    Ini iniGlobal = new Ini();
+    iniGlobal.getConfig().setMultiOption(true);  // duplicate keys (e.g. url in [remote])
+    iniGlobal.getConfig().setTree(false);        // don't need tree structure: it corrupts url in section name (e.g. [url "http://github.com/"]
+    try {
+      File globalIniFile = new File(System.getProperty("user.home"));
+      globalIniFile = new File(globalIniFile, ".gitconfig");
+      iniGlobal.load(globalIniFile);
+    }
+    catch (IOException e) {
+      LOG.warn(new RepoStateException("Couldn't load .git/config file at " + configFile.getPath(), e));
+      return emptyConfig;
+    }
+
     IdeaPluginDescriptor plugin = platformFacade.getPluginByClassName(GitConfig.class.getName());
     ClassLoader classLoader = plugin == null ?
                               GitConfig.class.getClassLoader() :   // null e.g. if IDEA is started from IDEA
                               plugin.getPluginClassLoader();
 
-    Pair<Collection<Remote>, Collection<Url>> remotesAndUrls = parseRemotes(ini, classLoader);
+    Pair<Collection<Remote>, Collection<Url>> remotesAndUrls = parseRemotes(ini, iniGlobal, classLoader);
     Collection<BranchConfig> trackedInfos = parseTrackedInfos(ini, classLoader);
 
     return new GitConfig(remotesAndUrls.getFirst(), remotesAndUrls.getSecond(), trackedInfos);
@@ -239,10 +252,13 @@ public class GitConfig {
   }
 
   @NotNull
-  private static Pair<Collection<Remote>, Collection<Url>> parseRemotes(@NotNull Ini ini, @NotNull ClassLoader classLoader) {
+  private static Pair<Collection<Remote>, Collection<Url>> parseRemotes(@NotNull Ini ini, Ini globalIni, @Nullable ClassLoader classLoader) {
     Collection<Remote> remotes = new ArrayList<Remote>();
     Collection<Url> urls = new ArrayList<Url>();
-    for (Map.Entry<String, Profile.Section> stringSectionEntry : ini.entrySet()) {
+    Set<Map.Entry<String, Profile.Section>> entries = new HashSet<Map.Entry<String, Profile.Section>>();
+    entries.addAll(globalIni.entrySet());
+    entries.addAll(ini.entrySet());
+    for (Map.Entry<String, Profile.Section> stringSectionEntry : entries) {
       String sectionName = stringSectionEntry.getKey();
       Profile.Section section = stringSectionEntry.getValue();
 

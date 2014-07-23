@@ -37,6 +37,8 @@ import com.intellij.util.ThrowableConsumer;
 import com.intellij.util.ThrowableConvertor;
 import com.intellij.util.containers.Convertor;
 import git4idea.DialogManager;
+import git4idea.GitLocalBranch;
+import git4idea.GitRemoteBranch;
 import git4idea.GitUtil;
 import git4idea.commands.GitCommand;
 import git4idea.commands.GitSimpleHandler;
@@ -508,7 +510,10 @@ public class GithubUtil {
 
   @Nullable
   public static Pair<GitRemote, String> findGithubRemote(@NotNull GitRepository repository) {
-    Pair<GitRemote, String> githubRemote = null;
+    Pair<GitRemote, String> githubRemote = findTrackedGithubRemote(repository);
+    if (githubRemote != null) {
+      return githubRemote;
+    }
     for (GitRemote gitRemote : repository.getRemotes()) {
       for (String remoteUrl : gitRemote.getUrls()) {
         if (GithubUrlUtil.isGithubUrl(remoteUrl)) {
@@ -520,6 +525,25 @@ public class GithubUtil {
             githubRemote = Pair.create(gitRemote, remoteUrl);
           }
           break;
+        }
+      }
+    }
+    return githubRemote;
+  }
+
+  private static Pair<GitRemote, String> findTrackedGithubRemote(GitRepository repository) {
+    Pair<GitRemote, String> githubRemote = null;
+    GitLocalBranch currentBranch = repository.getCurrentBranch();
+    if (currentBranch != null) {
+      GitRemoteBranch trackedBranch = currentBranch.findTrackedBranch(repository);
+      if (trackedBranch != null) {
+        GitRemote gitRemote = trackedBranch.getRemote();
+        for (String remoteUrl : gitRemote.getUrls()) {
+          if (GithubUrlUtil.isGithubUrl(remoteUrl)) {
+            if (githubRemote == null) {
+              githubRemote = Pair.create(gitRemote, remoteUrl);
+            }
+          }
         }
       }
     }
